@@ -71,7 +71,7 @@
       const splat = new SplatMesh({ url: splatURL });
 
       // Common fixes for splat exports
-    splat.rotation.set(-Math.PI / 2, 0, 0);   // try Y/Z alignment
+    splat.rotation.set(0, 0, 0);   // try Y/Z alignment
     splat.position.set(0, 0, 0);
     splat.scale.setScalar(1);                // try 0.1 or 10 if needed
       
@@ -92,7 +92,7 @@
       scene.add(yaw);
 
       // Spawn point
-      const spawn = new THREE.Vector3(0, 1.6, 2.5);
+      const spawn = new THREE.Vector3(0, 0, 0);
       const spawnYaw = Math.PI; // facing toward -Z
       const spawnPitch = 0;
 
