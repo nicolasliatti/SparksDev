@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Spark + three.js + walk in gsplat</title>
+    <style>
+      body { margin: 0; overflow: hidden; }
+      #hud {
+        position: fixed; left: 12px; top: 12px;
+        padding: 10px 12px;
+        font: 12px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        background: rgba(0,0,0,0.55); color: #fff; border-radius: 10px;
+        max-width: 380px;
+      }
+      #hud kbd {
+        background: rgba(255,255,255,0.12);
+        padding: 1px 6px; border-radius: 6px;
+        border: 1px solid rgba(255,255,255,0.18);
+      }
+      #hud button {
+        margin-top: 8px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.22);
+        background: rgba(255,255,255,0.10);
+        color: #fff;
+        cursor: pointer;
+      }
+      #hud button:hover { background: rgba(255,255,255,0.16); }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.178.0/three.module.js",
+          "@sparkjsdev/spark": "https://sparkjs.dev/releases/spark/0.1.10/spark.module.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="hud">
+      <div><strong>Click</strong> to lock mouse. <kbd>Esc</kbd> to release.</div>
+      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move, Mouse look, <kbd>Shift</kbd> sprint</div>
+      <div style="opacity:.8">Tip: if you see nothing, press <kbd>R</kbd> to reset.</div>
+      <button id="resetBtn">Reset camera (R)</button>
+    </div>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { SplatMesh } from "@sparkjsdev/spark";
+
+      // Basic scene
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0b0b0b);
+
+      const camera = new THREE.PerspectiveCamera(
+        60,
+        window.innerWidth / window.innerHeight,
+        0.05,
+        2000
+      );
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      document.body.appendChild(renderer.domElement);
+
+      // Add a splat
+      const splatURL = "https://limewire.com/d/oNJX5";
+      const splat = new SplatMesh({ url: splatURL });
+      splat.position.set(0, 0, -3);
+      scene.add(splat);
+
+      // Optional: subtle ambient so you can see a reference floor helper
+      const grid = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+      grid.position.y = -1.2;
+      scene.add(grid);
+
+      // First-person "walking" controls (no extra libs)
+      let pointerLocked = false;
+
+      const yaw = new THREE.Object3D();
+      const pitch = new THREE.Object3D();
+      yaw.add(pitch);
+      pitch.add(camera);
+      scene.add(yaw);
+
+      // Spawn point
+      const spawn = new THREE.Vector3(0, 1.6, 2.5);
+      const spawnYaw = Math.PI; // facing toward -Z
+      const spawnPitch = 0;
+
+      function resetCamera() {
+        yaw.position.copy(spawn);
+        yaw.rotation.set(0, spawnYaw, 0);
+        pitch.rotation.set(spawnPitch, 0, 0);
+        velocity.set(0, 0, 0);
+      }
+
+      // Keep height constant (simple "walking" without ground collision)
+      const eyeHeight = 1.6;
+
+      // Movement state
+      const keys = new Set();
+      const velocity = new THREE.Vector3();
+      const direction = new THREE.Vector3();
+
+      const baseSpeed = 3.2;     // meters per second feel
+      const sprintMult = 1.8;
+      const accel = 18.0;        // higher = snappier
+      const damping = 10.0;      // higher = more braking
+
+      // Mouse look
+      const sensitivity = 0.0022;
+      const maxPitch = Math.PI / 2 - 0.05;
+
+      function onMouseMove(e) {
+        if (!pointerLocked) return;
+
+        yaw.rotation.y -= e.movementX * sensitivity;
+        pitch.rotation.x -= e.movementY * sensitivity;
+        pitch.rotation.x = Math.max(-maxPitch, Math.min(maxPitch, pitch.rotation.x));
+      }
+
+      // Pointer lock
+      renderer.domElement.addEventListener("click", () => {
+        renderer.domElement.requestPointerLock();
+      });
+
+      document.addEventListener("pointerlockchange", () => {
+        pointerLocked = (document.pointerLockElement === renderer.domElement);
+        document.getElementById("hud").style.opacity = pointerLocked ? "0.35" : "1";
+      });
+
+      document.addEventListener("mousemove", onMouseMove);
+
+      // Keyboard
+      document.addEventListener("keydown", (e) => {
+        if (e.code === "KeyR") resetCamera();
+        keys.add(e.code);
+      });
+
+      document.addEventListener("keyup", (e) => {
+        keys.delete(e.code);
+      });
+
+      document.getElementById("resetBtn").addEventListener("click", resetCamera);
+
+      // Resize
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      resetCamera();
+
+      // Clock for delta time
+      const clock = new THREE.Clock();
+
+      renderer.setAnimationLoop(() => {
+        const dt = Math.min(clock.getDelta(), 0.033); // cap delta to avoid jumps
+
+        // Move
+        const forward =
+          (keys.has("KeyW") ? 1 : 0) +
+          (keys.has("KeyS") ? -1 : 0);
+        const strafe =
+          (keys.has("KeyD") ? 1 : 0) +
+          (keys.has("KeyA") ? -1 : 0);
+
+        // Build local movement direction (on XZ plane)
+        direction.set(strafe, 0, -forward);
+        if (direction.lengthSq() > 0) direction.normalize();
+
+        // Convert to world space by yaw
+        const speed = baseSpeed * (keys.has("ShiftLeft") || keys.has("ShiftRight") ? sprintMult : 1);
+        const targetVel = direction.clone().applyAxisAngle(new THREE.Vector3(0,1,0), yaw.rotation.y).multiplyScalar(speed);
+
+        // Smooth acceleration toward target, plus damping when no input
+        const t = 1 - Math.exp(-accel * dt);
+        velocity.lerp(targetVel, t);
+
+        const dampT = 1 - Math.exp(-damping * dt);
+        if (direction.lengthSq() === 0) velocity.lerp(new THREE.Vector3(0,0,0), dampT);
+
+        yaw.position.addScaledVector(velocity, dt);
+
+        // Keep a constant height (simple walk)
+        yaw.position.y = eyeHeight;
+
+        // Your splat can be static; rotation removed for "walk in scene"
+        renderer.render(scene, camera);
+      });
+    </script>
+  </body>
+</html>
