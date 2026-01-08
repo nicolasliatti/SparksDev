@@ -69,7 +69,12 @@
       // Add a splat
       const splatURL = "./Sunlit%20Rustic%20Arched%20Bedroom-2.spz";
       const splat = new SplatMesh({ url: splatURL });
-      splat.position.set(0, 0, -3);
+
+      // Common fixes for splat exports
+    splat.rotation.set(-Math.PI / 2, 0, 0);   // try Y/Z alignment
+    splat.position.set(0, 0, 0);
+    splat.scale.setScalar(1);                // try 0.1 or 10 if needed
+      
       scene.add(splat);
 
       // Optional: subtle ambient so you can see a reference floor helper
