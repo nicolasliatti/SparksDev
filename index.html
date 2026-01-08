@@ -71,7 +71,7 @@
       const splat = new SplatMesh({ url: splatURL });
 
       // Common fixes for splat exports
-    splat.rotation.set(Math.PI, 0, 0);   // try Y/Z alignment
+    splat.rotation.set(Math.PI, 0, Math.PI);   // try Y/Z alignment
     splat.position.set(0, 0, 0);
     splat.scale.setScalar(3);                // try 0.1 or 10 if needed
       
